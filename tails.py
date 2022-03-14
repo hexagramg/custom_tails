@@ -5,7 +5,6 @@ import logging
 from time import sleep
 from typing import Any, AnyStr, Tuple, Iterator
 import sys
-from unittest import skip
 
 class IOWrapper:
     """ Wrapper class for binary IOBase
@@ -114,8 +113,6 @@ class IOWrapper:
         while num > 0 and self.bytes_left[0] >= 0:
             num -= 1
             self.seek_start_of_line()
-            if num > 0 and self.bytes_left[0] > 0: #do not shift last iteration 
-                self.seek_offset(-1)
         
         return self.position
     
@@ -195,41 +192,51 @@ if __name__ == "__main__":
                         default=10)
     parser.add_argument("-s",
                         help="with -f sleep for S seconds between polling",
-                        default=1)
+                        default=1,
+                        type=int)
     parser.add_argument("file", help="path to file to read")
     args = parser.parse_args()
     path = Path(args.file)
-    while True:
-        first = False
-        try:
-            if path.is_file():
-                p = path.resolve()
-                with open(path.resolve(), mode="r+b") as file:
-                    wrapper = IOWrapper(file)
-                    if args.bytes is None:
-                        wrapper.seek_previous_lines(args.n)
-                    else:
-                        wrapper.seek_last_bytes(args.bytes)
-                    for line in wrapper:
-                        print(line)
-                    
-                    while True:
-                        sleep(args.s)
-                        changed, increased = wrapper.check_size()
-                        if changed:
-                            if not increased:
-                                logging.warning("file got truncated")
-                                wrapper.seek_previous_lines(args.n)
-                            for line in wrapper:
-                                print(line)
-                                 
+    try:
+        while True:
+            first = False
+            try:
+                if path.is_file():
+                    p = path.resolve()
+                    with open(path.resolve(), mode="r+b") as file:
+                        wrapper = IOWrapper(file)
+                        if args.bytes is None:
+                            wrapper.seek_previous_lines(args.n)
+                        else:
+                            wrapper.seek_last_bytes(args.bytes)
+                        for line in wrapper:
+                            print(line)
+                        if args.follow:
+                            while True:
+                                sleep(args.s)
+                                changed, increased = wrapper.check_size()
+                                if changed:
+                                    if not increased:
+                                        logging.warning("file got truncated")
+                                        wrapper.seek_previous_lines(args.n)
+                                    for line in wrapper:
+                                        print(line)
+                                    
+                else:
+                    raise OSError("file not found")        
+                                    
                                 
                             
-                        
-        except OSError as e:
-            logging.warning(f'catched error {e} when file was processed')
-        
-        if not args.retry:
-            break
+            except OSError as e:
+                logging.warning(f'error "{e}" when file was processed')
             
-    pass
+            if not args.retry:
+                break
+
+            sleep(args.s)
+            logging.warning("retrying to open file")
+            
+    except KeyboardInterrupt as e:
+        sys.exit(0)
+    
+    sys.exit(0)
