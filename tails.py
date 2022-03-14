@@ -153,26 +153,29 @@ class IOWrapper:
         Returns:
             AnyStr: decoded line from file 
         """
-        skip_once = True
-        while skip_once:
+        # allows to skip one cycle if _ended_without_eos was set
+        skip_flag = True 
+        while skip_flag:
             if self.bytes_left[1] <= 0:
                 raise StopIteration
             line = self._base.readline()
             line = line.decode(sys.stdout.encoding)
+            self._cur_postion = self._base.tell()
             # if previous line was without eos and this one has only eos 
             # then do not print this eos 
             if self._ended_without_eos :
                 self._ended_without_eos = False
                 if not (len(line) == 1 and line[0]=="\n"):
-                    skip_once = False 
+                    skip_flag = False 
             else:
-                skip_once = False
-            # if this line was withous eos set flag
-            if len(line) > 0 and line[-1] != "\n":
-                self._ended_without_eos = True
-            else:
-                line = line.replace("\n", "")
-            self._cur_postion = self._base.tell()
+                skip_flag = False
+            
+            if not skip_flag:
+                # if this line was withous eos set flag
+                if len(line) > 0 and line[-1] != "\n":
+                    self._ended_without_eos = True
+                else:
+                    line = line.replace("\n", "")
         return line 
 
 def open_file_and_tail(path:Path):
@@ -246,6 +249,6 @@ if __name__ == "__main__":
             logging.warning("retrying to open file")
             
     except KeyboardInterrupt as e:
-        sys.exit(0)
+        pass
     
     sys.exit(0)
