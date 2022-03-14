@@ -175,6 +175,38 @@ class IOWrapper:
             self._cur_postion = self._base.tell()
         return line 
 
+def open_file_and_tail(path:Path):
+    """
+    tail the file by given path
+    """ 
+    with open(path.resolve(), mode="r+b") as file:
+        wrapper = IOWrapper(file)
+        if args.bytes is None:
+            wrapper.seek_previous_lines(args.n)
+        else:
+            wrapper.seek_last_bytes(args.bytes)
+        for line in wrapper:
+            print(line)
+        if args.follow:
+            polling_updates(wrapper)    
+
+def polling_updates(wrapper: IOWrapper):
+    """poll updates from wrapper
+
+    Args:
+        wrapper (IOWrapper): wrapper with active IOBuffer 
+    """
+    while True:
+        sleep(args.s)
+        changed, increased = wrapper.check_size()
+        if changed:
+            if not increased:
+                logging.warning("file got truncated")
+                wrapper.seek_previous_lines(args.n)
+            for line in wrapper:
+                print(line)
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--retry", 
@@ -199,34 +231,11 @@ if __name__ == "__main__":
     path = Path(args.file)
     try:
         while True:
-            first = False
             try:
                 if path.is_file():
-                    p = path.resolve()
-                    with open(path.resolve(), mode="r+b") as file:
-                        wrapper = IOWrapper(file)
-                        if args.bytes is None:
-                            wrapper.seek_previous_lines(args.n)
-                        else:
-                            wrapper.seek_last_bytes(args.bytes)
-                        for line in wrapper:
-                            print(line)
-                        if args.follow:
-                            while True:
-                                sleep(args.s)
-                                changed, increased = wrapper.check_size()
-                                if changed:
-                                    if not increased:
-                                        logging.warning("file got truncated")
-                                        wrapper.seek_previous_lines(args.n)
-                                    for line in wrapper:
-                                        print(line)
-                                    
+                    open_file_and_tail(path)
                 else:
                     raise OSError("file not found")        
-                                    
-                                
-                            
             except OSError as e:
                 logging.warning(f'error "{e}" when file was processed')
             
